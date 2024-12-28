@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Compressor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body>
+    <h1>Image Compressor</h1>
+    <form id="compress-form" enctype="multipart/form-data">
+        <label>Choose Images:</label>
+        <input type="file" name="files" multiple required>
+        <br><br>
+        <label>Prefix:</label>
+        <input type="text" name="prefix" placeholder="Optional">
+        <br><br>
+        <label>Suffix:</label>
+        <input type="text" name="suffix" placeholder="Optional">
+        <br><br>
+        <label>Max File Size (KB):</label>
+        <input type="number" name="max_size" required>
+        <br><br>
+        <button type="submit">Compress Images</button>
+    </form>
+
+    <h2>Preview</h2>
+    <div id="preview-container"></div>
+
+    <div id="progress-container" style="display: none;">
+        <p>Compression Progress:</p>
+        <progress id="progress-bar" value="0" max="100"></progress>
+    </div>
+
+    <h2>Download Compressed Images</h2>
+    <div id="download-container"></div>
+
+    <div id="status"></div>
+
+    <script>
+        const previewContainer = document.getElementById("preview-container");
+        const downloadContainer = document.getElementById("download-container");
+        const compressForm = document.getElementById("compress-form");
+
+        compressForm.querySelector('input[name="files"]').addEventListener("change", function () {
+            previewContainer.innerHTML = ""; // Clear existing previews
+            for (const file of this.files) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const img = document.createElement("img");
+                    img.src = e.target.result;
+                    img.style.width = "150px";
+                    img.style.margin = "10px";
+                    previewContainer.appendChild(img);
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        compressForm.onsubmit = async function (event) {
+            event.preventDefault();
+
+            const formData = new FormData(compressForm);
+            document.getElementById("progress-container").style.display = "block";
+            downloadContainer.innerHTML = ""; // Clear old download links
+
+            // Start compressing
+            fetch("{{ url_for('compress') }}", {
+                method: "POST",
+                body: formData,
+            })
+                .then((response) => response.json())
+                .then((data) => {
+                    document.getElementById("status").innerText = data.message;
+                    // Add download links for compressed files
+                    data.files.forEach((file) => {
+                        const link = document.createElement("a");
+                        link.href = "{{ url_for('static', filename='compressed_images') }}/" + file;
+                        link.innerText = `Download ${file}`;
+                        link.download = file;
+                        link.style.display = "block";
+                        downloadContainer.appendChild(link);
+                    });
+                });
+
+            // Fetch progress every second
+            const progressBar = document.getElementById("progress-bar");
+            const interval = setInterval(async () => {
+                const response = await fetch("{{ url_for('get_progress') }}");
+                const progressData = await response.json();
+                progressBar.value = progressData.progress;
+
+                if (progressData.progress >= 100) clearInterval(interval);
+            }, 1000);
+        };
+    </script>
+</body>
+</html>
